@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Fire: Real GLB Animation & Character Lobby</title>
+    <!-- Three.js Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; font-family: 'Arial Black', sans-serif; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #050508; color: #fff; }
+
+        #lobby-container {
+            width: 100%; height: 100%; position: relative;
+            background: linear-gradient(180deg, rgba(16, 16, 24, 0.4) 0%, rgba(5, 5, 8, 0.9) 100%), 
+                        url('https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?auto=format&fit=crop&q=80&w=1920') no-repeat center center/cover;
+        }
+
+        #canvas3d-viewport { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* ================= FF HUD UI SYSTEM ================= */
+        .ui-layer { position: absolute; width: 100%; height: 100%; z-index: 10; pointer-events: none; padding: 25px; display: flex; flex-direction: column; justify-content: space-between; }
+        .interactive { pointer-events: auto; }
+
+        /* Profile Details */
+        .profile-card { background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 12px; border: 2px solid #ff9100; box-shadow: 0 0 15px rgba(255, 145, 0, 0.3); width: fit-content; }
+        .username { font-size: 20px; letter-spacing: 1px; text-shadow: 0 0 8px #ff9100; }
+        .uid-tag { color: #ff9100; font-size: 11px; font-weight: bold; }
+        .rank-badge { font-size: 13px; color: #00ff66; margin-top: 2px; }
+
+        /* Wallet/Currency Panel */
+        .currency-bar { display: flex; gap: 15px; background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 25px; border: 1px solid #333; height: fit-content; }
+        .currency-item { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #fff; }
+        .gold { color: #ffea00; } .diamond { color: #00e5ff; }
+
+        /* ================= SEPARATE DUAL UPLOAD PANELS ================= */
+        .control-side-panel { display: flex; flex-direction: column; gap: 20px; width: 310px; margin-top: 15px; }
+        
+        .upload-card { background: rgba(0,0,0,0.85); border: 2px dashed #444; padding: 15px; border-radius: 12px; text-align: center; transition: 0.3s; }
+        .map-border { border-color: #00e5ff !important; }
+        .char-border { border-color: #ff9100 !important; }
+        
+        .file-input-hide { display: none; }
+        .lbl-btn { color: #000; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; display: inline-block; margin-top: 8px; text-transform: uppercase; }
+        .map-btn { background: linear-gradient(135deg, #00e5ff, #0088cc); }
+        .char-btn { background: linear-gradient(135deg, #ff9100, #ff6a00); }
+        
+        .status-txt { font-size: 11px; color: #aaa; margin-top: 6px; font-family: sans-serif; }
+
+        /* Right Side Utilities */
+        .right-menu { display: flex; flex-direction: column; gap: 15px; position: absolute; right: 25px; top: 25px; align-items: flex-end; }
+        .side-icon-btn { width: 50px; height: 50px; background: rgba(0,0,0,0.8); border: 2px solid #444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; }
+        .side-icon-btn:hover { border-color: #ff9100; box-shadow: 0 0 10px #ff9100; }
+
+        /* ================= EMOTE CONTROLS DOCK ================= */
+        .bottom-shelf { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .emote-dock-title { font-size: 13px; color: #ffea00; letter-spacing: 2px; text-shadow: 0 0 8px #ff6a00; }
+        .emotes-row { display: flex; gap: 20px; background: rgba(0,0,0,0.8); padding: 15px 30px; border-radius: 50px; border: 2px solid #333; box-shadow: inset 0 0 15px rgba(0,0,0,0.5); overflow-x: auto; max-width: 90vw; }
+        
+        .emote-btn {
+            width: 75px; height: 75px; background: #1a1b22; border: 2px solid #444; border-radius: 50%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.2s; flex-shrink: 0;
+        }
+        .unlocked-indicator { font-size: 26px; margin-bottom: 2px; }
+        .emote-lbl { font-size: 10px; color: #bbb; text-transform: uppercase; }
+        .emote-active { border-color: #ffea00 !important; box-shadow: 0 0 15px #ffea00 !important; background: #2a2215 !important; }
+        .emote-btn:hover { border-color: #ff9100; transform: scale(1.1); }
+
+        .view-controls-hint { font-size: 11px; color: #777; letter-spacing: 1px; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-container">
+        <!-- 3D WebGL Viewport Layer -->
+        <div id="canvas3d-viewport"></div>
+
+        <!-- Interface Layout Overlay -->
+        <div class="ui-layer">
+            
+            
+               
+
+            <!-- Left Loading Hub Panel -->
+            <div style="display:flex; justify-content:space-between; align-items:center; width:100%; height: 60%;">
+                <div class="control-side-panel interactive">
+                    
+                    
+                    <!-- 2. CHARACTER LOADER -->
+                    <div class="upload-card char-border">
+                        <span style="font-size: 12px; color: #ff9100;">🎭 CHARACTER MODEL LOADER</span>
+                        <p style="font-size: 11px; color: #ccc; margin-top:3px;">Upload character .glb file containing built-in animations.</p>
+                        <label for="char-glb" class="char-btn lbl-btn">LOAD PLAYER GLB</label>
+                        <input type="file" id="char-glb" class="file-input-hide" accept=".glb" onchange="loadPlayerCharacterAsset(event)">
+                        <div id="char-status" class="status-txt">Player Mesh: Waiting...</div>
+                    </div>
+                </div>
+
+                <div class="right-menu interactive">
+                    <div class="side-icon-btn" onclick="alert('Lobby UI Refreshed!')">⚙️</div>
+                </div>
+            </div>
+
+            <!-- Emote Control Dock Menu Footer -->
+            <div class="bottom-shelf interactive">
+                <div class="view-controls-hint">Hold Left-Click and move mouse around to rotate character view 360°</div>
+                <div class="emote-dock-title">🔥 PLAY GLB EMBEDDED EMOTES 🔥</div>
+                
+                <div class="emotes-row" id="emote-buttons-container">
+                    <!-- Buttons will dynamically auto-generate matching your GLB model files animations tracks -->
+                    <div style="font-size:12px; color:#aaa; padding:10px;">Upload character model to unlock emote slots...</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let customLobbyMap = null;
+        let playerCharacterMesh = null;
+        
+        // ================= REAL TIME GLB EMBEDDED ANIMATION ENGINE =================
+        let animationMixer = null; // System mixer container
+        let availableEmoteActions = {}; // Object mapping clip strings 
+        let currentActiveAction = null;
+        let clock = new THREE.Clock();
+
+        function init3DEnvironment() {
+            const container = document.getElementById('canvas3d-viewport');
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 3.5, 12); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.02; 
+            controls.minDistance = 2;
+            controls.maxDistance = 60; 
+            controls.target.set(0, 2.0, 0);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            let keyLight = new THREE.DirectionalLight(0xffffff, 1.0); keyLight.position.set(20, 60, 30); scene.add(keyLight);
+
+            // Default base platform
+            let standGeo = new THREE.CylinderGeometry(4, 4.3, 0.2, 32);
+            let standMat = new THREE.MeshStandardMaterial({ color: 0x14151b, metalness: 0.8, roughness: 0.3 });
+            let standMesh = new THREE.Mesh(standGeo, standMat); standMesh.position.y = -0.1;
+            standMesh.name = "default_pedestal";
+            scene.add(standMesh);
+
+            window.addEventListener('resize', onWindowResize, false);
+            mainRenderEngineLoop();
+        }
+
+        // ================= 1. DYNAMIC MAP ASSET LOADER =================
+        function loadCustomMapAsset(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (customLobbyMap) { scene.remove(customLobbyMap); }
+            
+            let defaultPedestal = scene.getObjectByName("default_pedestal");
+            if(defaultPedestal) { scene.remove(defaultPedestal); }
+
+            const blobMapUri = URL.createObjectURL(file);
+            document.getElementById('map-status').innerText = file.name + " (Loaded)";
+            document.getElementById('map-status').style.color = "#00e5ff";
+
+            const loader = new THREE.GLTFLoader();
+            loader.load(blobMapUri, function(gltf) {
+                customLobbyMap = gltf.scene;
+                customLobbyMap.position.set(0, -2.5, 0); 
+                customLobbyMap.scale.set(4.0, 4.0, 4.0); 
+                scene.add(customLobbyMap);
+            });
+        }
+
+        // ================= 2. CHARACTER GLB LOADER & ANIMATION MIXER LINK =================
+        function loadPlayerCharacterAsset(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (playerCharacterMesh) { scene.remove(playerCharacterMesh); animationMixer = null; availableEmoteActions = {}; }
+            const blobCharUri = URL.createObjectURL(file);
+            document.getElementById('char-status').innerText = file.name + " (Lobby Live)";
+            document.getElementById('char-status').style.color = "#ff9100";
+
+            const loader = new THREE.GLTFLoader();
+            loader.load(blobCharUri, function(gltf) {
+                playerCharacterMesh = gltf.scene;
+                
+                let bounds = new THREE.Box3().setFromObject(playerCharacterMesh);
+                let currentModelHeight = bounds.getSize(new THREE.Vector3()).y;
+                let targetScaleMultiplier = 5.2 / currentModelHeight; 
+                
+                playerCharacterMesh.scale.set(targetScaleMultiplier, targetScaleMultiplier, targetScaleMultiplier);
+                playerCharacterMesh.position.set(0, 0.05, 0); // Spawns right over the floor surface
+                playerCharacterMesh.rotation.set(0, 0, 0);
+                scene.add(playerCharacterMesh);
+
+                // Initialize Animation Mixer for real GLB motion tracking
+                let animationsClipsArray = gltf.animations;
+                if (animationsClipsArray && animationsClipsArray.length > 0) {
+                    animationMixer = new THREE.AnimationMixer(playerCharacterMesh);
+                    
+                    // Clear older design UI button list row elements
+                    const shelf = document.getElementById('emote-buttons-container');
+                    shelf.innerHTML = "";
+
+                    // Compile and load every animation inside GLB as a separate working emote button!
+                    animationsClipsArray.forEach((clip, index) => {
+                        let actionName = clip.name || `EMOTE_${index + 1}`;
+                        availableEmoteActions[actionName] = animationMixer.clipAction(clip);
+
+                        // Create dynamic professional HTML Emote Selector Button
+                        let btn = document.createElement('div');
+                        btn.className = "emote-btn";
+                        btn.id = `btn-action-${index}`;
+                        btn.innerHTML = `<span class="unlocked-indicator">🕺</span><span class="emote-lbl">${actionName}</span>`;
+                        btn.onclick = () => { playRealGlbEmoteTrack(actionName, `btn-action-${index}`); };
+                        
+                        shelf.appendChild(btn);
+                    });
+
+                    // Play the very first clip automatically on successful character boot load sequence
+                    playRealGlbEmoteTrack(animationsClipsArray[0].name, 'btn-action-0');
+                } else {
+                    document.getElementById('emote-buttons-container').innerHTML = 
+                        `<div style="color:red; font-size:11px;">⚠️ Model loaded successfully, but NO built-in animation tracks were detected inside this GLB file!</div>`;
+                }
+            });
+        }
+
+        // Action mixer trigger execution module
+        function playRealGlbEmoteTrack(actionName, btnHtmlId) {
+            if (!animationMixer || !availableEmoteActions[actionName]) return;
+
+            // Stop current playing emote track gracefully
+            if (currentActiveAction) {
+                currentActiveAction.fadeOut(0.2);
+            }
+
+            // Highlight chosen interface elements
+            document.querySelectorAll('.emote-btn').forEach(btn => btn.classList.remove('emote-active'));
+            const elementNode = document.getElementById(btnHtmlId);
+            if(elementNode) elementNode.classList.add('emote-active');
+
+            // Play new built-in track smoothly matching absolute frame transformations
+            currentActiveAction = availableEmoteActions[actionName];
+            currentActiveAction.reset().setEffectiveTimeScale(1.0).setEffectiveWeight(1.0).fadeIn(0.2).play();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Rerender loop tracking update frames timeline matrices ticks
+        function mainRenderEngineLoop() {
+            requestAnimationFrame(mainRenderEngineLoop);
+            
+            let deltaClockTick = clock.getDelta();
+            if (animationMixer) {
+                animationMixer.update(deltaClockTick); // Process true hardware-baked skeletal bone shifts
+            }
+
+            // Slowly spin character mesh plate circle if idle without clip playback focus
+            if (playerCharacterMesh && !animationMixer) {
+                playerCharacterMesh.rotation.y += 0.005;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init3DEnvironment;
+    </script>
+</body>
+</html>
